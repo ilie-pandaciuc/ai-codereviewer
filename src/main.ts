@@ -25,7 +25,7 @@ interface PRDetails {
 
 async function getPRDetails(): Promise<PRDetails> {
   const { repository, number } = JSON.parse(
-    readFileSync(process.env.GITHUB_EVENT_PATH || "", "utf8")
+    readFileSync(process.env.GITHUB_EVENT_PATH || "", "utf8"),
   );
   const prResponse = await octokit.pulls.get({
     owner: repository.owner.login,
@@ -110,23 +110,27 @@ ${chunk.changes
 `;
 }
 
-async function getAIResponse(prompt: string): Promise<Array<{
-  lineNumber: string;
-  reviewComment: string;
-}> | null> {
+async function getAIResponse(
+  prompt: string,
+): Promise<Array<{ lineNumber: string; reviewComment: string }> | null> {
+  const isO3 = OPENAI_API_MODEL.startsWith("o3");
+
   const queryConfig = {
     model: OPENAI_API_MODEL,
-    temperature: 0.2,
-    max_completion_tokens: 700,
-    top_p: 1,
-    frequency_penalty: 0,
-    presence_penalty: 0,
+    ...(isO3 ? { max_completion_tokens: 700 } : { max_tokens: 700 }),
+    ...(isO3
+      ? {}
+      : {
+          temperature: 0.2,
+          top_p: 1,
+          frequency_penalty: 0,
+          presence_penalty: 0,
+        }),
   };
 
   try {
     const response = await openai.chat.completions.create({
       ...queryConfig,
-      // return JSON if the model supports it:
       ...(OPENAI_API_MODEL === "gpt-4-1106-preview"
         ? { response_format: { type: "json_object" } }
         : {}),
@@ -138,10 +142,10 @@ async function getAIResponse(prompt: string): Promise<Array<{
       ],
     });
 
-    const res = response.choices[0].message?.content?.trim() || "{}";
-    return JSON.parse(res).reviews;
-  } catch (error) {
-    console.error("Error:", error);
+    const raw = response.choices[0].message?.content?.trim() ?? "{}";
+    return JSON.parse(raw).reviews;
+  } catch (err) {
+    console.error("Error:", err);
     return null;
   }
 }
