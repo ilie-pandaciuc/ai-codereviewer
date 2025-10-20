@@ -253,10 +253,10 @@ once@^1.4.0:
   dependencies:
     wrappy "1"
 
-openai@^5.9.0:
-  version "5.9.0"
-  resolved "https://registry.yarnpkg.com/openai/-/openai-5.9.0.tgz#fe6109d3dca5be6dd742f7ac54d810a0086d1d37"
-  integrity sha512-cmLC0pfqLLhBGxE4aZPyRPjydgYCncppV2ClQkKmW79hNjCvmzkfhz8rN5/YVDmjVQlFV+UsF1JIuNjNgeagyQ==
+openai@^6.6.0:
+  version "6.6.0"
+  resolved "https://registry.yarnpkg.com/openai/-/openai-6.6.0.tgz#d4f7846fd21adc033f968601fc13d6240f3b9b08"
+  integrity sha512-1yWk4cBsHF5Bq9TreHYOHY7pbqdlT74COnm8vPx7WKn36StS+Hyk8DdAitnLaw67a5Cudkz5EmlFQjSrNnrA2w==
 
 parse-diff@^0.11.1:
   version "0.11.1"
