@@ -56,11 +56,18 @@ async function getDiff(
   return response.data;
 }
 
+type Side = "LEFT" | "RIGHT";
+
 async function analyzeCode(
   parsedDiff: File[],
   prDetails: PRDetails
-): Promise<Array<{ body: string; path: string; line: number }>> {
-  const comments: Array<{ body: string; path: string; line: number }> = [];
+): Promise<Array<{ body: string; path: string; line: number; side: Side }>> {
+  const comments: Array<{
+    body: string;
+    path: string;
+    line: number;
+    side: Side;
+  }> = [];
 
   for (const file of parsedDiff) {
     if (file.to === "/dev/null") continue; // Ignore deleted files
@@ -117,7 +124,7 @@ async function getAIResponse(
 
   const queryConfig = {
     model: OPENAI_API_MODEL,
-    ...(isO3 ? { max_completion_tokens: 700 } : { max_tokens: 700 }),
+    ...(isO3 ? { max_completion_tokens: 2000 } : { max_tokens: 700 }),
     ...(isO3
       ? {}
       : {
@@ -150,6 +157,16 @@ async function getAIResponse(
   }
 }
 
+function getLineSides(chunk: Chunk): Map<number, Side> {
+  const sides = new Map<number, Side>();
+  for (const change of chunk.changes) {
+    // @ts-expect-error - ln, ln2 exist depending on change.type
+    const line = change.ln ? change.ln : change.ln2;
+    sides.set(line, change.type === "del" ? "LEFT" : "RIGHT");
+  }
+  return sides;
+}
+
 function createComment(
   file: File,
   chunk: Chunk,
@@ -157,15 +174,18 @@ function createComment(
     lineNumber: string;
     reviewComment: string;
   }>
-): Array<{ body: string; path: string; line: number }> {
+): Array<{ body: string; path: string; line: number; side: Side }> {
+  const lineSides = getLineSides(chunk);
   return aiResponses.flatMap((aiResponse) => {
     if (!file.to) {
       return [];
     }
+    const line = Number(aiResponse.lineNumber);
     return {
       body: aiResponse.reviewComment,
       path: file.to,
-      line: Number(aiResponse.lineNumber),
+      line,
+      side: lineSides.get(line) ?? "RIGHT",
     };
   });
 }
@@ -174,7 +194,7 @@ async function createReviewComment(
   owner: string,
   repo: string,
   pull_number: number,
-  comments: Array<{ body: string; path: string; line: number }>
+  comments: Array<{ body: string; path: string; line: number; side: Side }>
 ): Promise<void> {
   await octokit.pulls.createReview({
     owner,
