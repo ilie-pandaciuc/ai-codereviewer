@@ -62,9 +62,15 @@ const GITHUB_TOKEN = core.getInput("GITHUB_TOKEN");
 const OPENAI_API_KEY = core.getInput("OPENAI_API_KEY");
 const OPENAI_API_MODEL = core.getInput("OPENAI_API_MODEL");
 const octokit = new rest_1.Octokit({ auth: GITHUB_TOKEN });
-const openai = new openai_1.default({
-    apiKey: OPENAI_API_KEY,
-});
+// Constructed lazily: the OpenAI client throws on an empty key, and doing that at
+// module scope escapes the catch around main() and crashes with a raw stack trace.
+let openaiClient = null;
+function getOpenAI() {
+    if (!openaiClient) {
+        openaiClient = new openai_1.default({ apiKey: OPENAI_API_KEY });
+    }
+    return openaiClient;
+}
 function getPRDetails() {
     return __awaiter(this, void 0, void 0, function* () {
         var _a, _b;
@@ -157,7 +163,7 @@ function getAIResponse(prompt) {
                 presence_penalty: 0,
             }));
         try {
-            const response = yield openai.chat.completions.create(Object.assign(Object.assign(Object.assign({}, queryConfig), (OPENAI_API_MODEL === "gpt-4-1106-preview"
+            const response = yield getOpenAI().chat.completions.create(Object.assign(Object.assign(Object.assign({}, queryConfig), (OPENAI_API_MODEL === "gpt-4-1106-preview"
                 ? { response_format: { type: "json_object" } }
                 : {})), { messages: [
                     {
@@ -213,6 +219,12 @@ function createReviewComment(owner, repo, pull_number, comments) {
 function main() {
     return __awaiter(this, void 0, void 0, function* () {
         var _a;
+        if (!OPENAI_API_KEY) {
+            core.warning("OPENAI_API_KEY is empty, skipping the review. Workflows triggered by " +
+                "Dependabot read from the Dependabot secrets store rather than the " +
+                "Actions one, so repository secrets resolve to an empty string there.");
+            return;
+        }
         const prDetails = yield getPRDetails();
         let diff;
         const eventData = JSON.parse((0, fs_1.readFileSync)((_a = process.env.GITHUB_EVENT_PATH) !== null && _a !== void 0 ? _a : "", "utf8"));

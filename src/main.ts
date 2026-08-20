@@ -11,9 +11,16 @@ const OPENAI_API_MODEL: string = core.getInput("OPENAI_API_MODEL");
 
 const octokit = new Octokit({ auth: GITHUB_TOKEN });
 
-const openai = new OpenAI({
-  apiKey: OPENAI_API_KEY,
-});
+// Constructed lazily: the OpenAI client throws on an empty key, and doing that at
+// module scope escapes the catch around main() and crashes with a raw stack trace.
+let openaiClient: OpenAI | null = null;
+
+function getOpenAI(): OpenAI {
+  if (!openaiClient) {
+    openaiClient = new OpenAI({ apiKey: OPENAI_API_KEY });
+  }
+  return openaiClient;
+}
 
 interface PRDetails {
   owner: string;
@@ -136,7 +143,7 @@ async function getAIResponse(
   };
 
   try {
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAI().chat.completions.create({
       ...queryConfig,
       ...(OPENAI_API_MODEL === "gpt-4-1106-preview"
         ? { response_format: { type: "json_object" } }
@@ -206,6 +213,15 @@ async function createReviewComment(
 }
 
 async function main() {
+  if (!OPENAI_API_KEY) {
+    core.warning(
+      "OPENAI_API_KEY is empty, skipping the review. Workflows triggered by " +
+        "Dependabot read from the Dependabot secrets store rather than the " +
+        "Actions one, so repository secrets resolve to an empty string there."
+    );
+    return;
+  }
+
   const prDetails = await getPRDetails();
   let diff: string | null;
   const eventData = JSON.parse(
